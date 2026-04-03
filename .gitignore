@@ -3,5 +3,8 @@ scripts/gemini/config.json
 outputs/
 site/node_modules/
 site/dist/
+server/node_modules/
+server/dist/
+server/.env
 .env
 *.env.local
