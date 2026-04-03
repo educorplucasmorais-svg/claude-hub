@@ -1,0 +1,224 @@
+﻿# Research Queue 2026-04-03
+Exportado em: 03/04/2026 16:44
+Total de arquivos: 5
+
+==================================================
+
+## 2026-04-03 - Claude Hub - Configuracao Inicial
+
+# Claude Hub - Configuracao Inicial
+
+## Claude Hub conectado ao Kaia
+
+Este vault esta integrado ao Claude Hub localizado em:
+C:\Users\Pichau\Desktop\Claude Full
+
+### Skills Disponiveis
+- code-review, debug, refactor, docs-generator
+- test-generator, architect, security-audit, performance
+- git-workflow, api-design, obsidian-sync, notebooklm-export
+
+### Scripts
+- sync-to-vault.ps1   — criar/sincronizar notas
+- export-to-notebooklm.ps1 — exportar para NotebookLM
+
+### Links
+- [[Claude Hub Skills]]
+
+==================================================
+
+## 2026-04-03 - Daily 2026-04-03
+
+# Daily 2026-04-03
+
+## Status do Hub
+- Skills ativas: 12 | Agentes: 4 | Integracoes: Obsidian + NotebookLM
+- Ultima execucao anterior: nunca
+
+## Arquivos Modificados (24h)
+- agents\tasks\code-guardian.ps1 (16:42)
+- agents\tasks\researcher.ps1 (16:42)
+- agents\tasks\inbox-processor.ps1 (16:41)
+- agents\tasks\daily-briefing.ps1 (16:41)
+- agents\personas\security.agent.md (16:40)
+- agents\personas\debugger.agent.md (16:39)
+- agents\personas\architect.agent.md (16:39)
+- agents\personas\code-reviewer.agent.md (16:39)
+- agents\dashboard.ps1 (16:39)
+- agents\setup-scheduler.ps1 (16:38)
+
+## Inbox Obsidian
+- [[2026-04-03 - Claude Hub - Configuracao Inicial]]
+
+## Prioridades do Dia
+1. Processar notas do Inbox do Obsidian
+2. Revisar codigo modificado com Code Guardian
+3. Adicionar topicos de pesquisa ao Researcher
+4. Atualizar MEMORY.md ao final do dia
+
+## Comandos Rapidos
+  .\agents\orchestrator.ps1
+  .\agents\dashboard.ps1
+  .\agents\tasks\researcher.ps1 -Add 'Topico'
+
+==================================================
+
+## 2026-04-03 - Research - Clean Architecture Node.js
+
+# Research - Clean Architecture Node.js
+
+## Visao Geral
+Documento de pesquisa gerado automaticamente pelo Researcher Agent em 2026-04-03.
+Topico: **Clean Architecture Node.js**
+
+## O Que Pesquisar
+Use os prompts abaixo no Claude ou NotebookLM:
+
+### Prompt 1 - Conceito
+```
+Explique Clean Architecture Node.js de forma completa e didatica:
+1. O que e e para que serve
+2. Conceitos fundamentais (5-10 conceitos-chave)
+3. Como funciona internamente
+4. Casos de uso reais
+5. Exemplos praticos com codigo
+6. Vantagens e limitacoes
+7. Alternativas existentes
+8. Recursos para aprofundar
+```
+
+### Prompt 2 - Pratico
+```
+Mostre Clean Architecture Node.js na pratica com exemplos de codigo TypeScript/React.
+Inclua: setup basico, casos comuns, armadilhas a evitar, boas praticas.
+```
+
+### Prompt 3 - Avancado
+```
+Quais sao os conceitos avancados de Clean Architecture Node.js que um desenvolvedor senior deve dominar?
+Inclua: performance, seguranca, patterns especificos, integracao com outras ferramentas.
+```
+
+## Conexoes com Outras Notas
+- [[Claude Hub Skills]]
+- (adicionar links apos pesquisar)
+
+## Minhas Notas
+(espaco para anotar insights durante a pesquisa)
+
+## Status
+- [ ] Prompt 1 respondido
+- [ ] Prompt 2 respondido
+- [ ] Prompt 3 respondido
+- [ ] Exportado para NotebookLM
+- [ ] Conectado a notas existentes
+
+
+==================================================
+
+## 2026-04-03 - Research - Prisma ORM boas praticas
+
+# Research - Prisma ORM boas praticas
+
+## Visao Geral
+Documento de pesquisa gerado automaticamente pelo Researcher Agent em 2026-04-03.
+Topico: **Prisma ORM boas praticas**
+
+## O Que Pesquisar
+Use os prompts abaixo no Claude ou NotebookLM:
+
+### Prompt 1 - Conceito
+```
+Explique Prisma ORM boas praticas de forma completa e didatica:
+1. O que e e para que serve
+2. Conceitos fundamentais (5-10 conceitos-chave)
+3. Como funciona internamente
+4. Casos de uso reais
+5. Exemplos praticos com codigo
+6. Vantagens e limitacoes
+7. Alternativas existentes
+8. Recursos para aprofundar
+```
+
+### Prompt 2 - Pratico
+```
+Mostre Prisma ORM boas praticas na pratica com exemplos de codigo TypeScript/React.
+Inclua: setup basico, casos comuns, armadilhas a evitar, boas praticas.
+```
+
+### Prompt 3 - Avancado
+```
+Quais sao os conceitos avancados de Prisma ORM boas praticas que um desenvolvedor senior deve dominar?
+Inclua: performance, seguranca, patterns especificos, integracao com outras ferramentas.
+```
+
+## Conexoes com Outras Notas
+- [[Claude Hub Skills]]
+- (adicionar links apos pesquisar)
+
+## Minhas Notas
+(espaco para anotar insights durante a pesquisa)
+
+## Status
+- [ ] Prompt 1 respondido
+- [ ] Prompt 2 respondido
+- [ ] Prompt 3 respondido
+- [ ] Exportado para NotebookLM
+- [ ] Conectado a notas existentes
+
+
+==================================================
+
+## 2026-04-03 - Research - React Server Components em 2026
+
+# Research - React Server Components em 2026
+
+## Visao Geral
+Documento de pesquisa gerado automaticamente pelo Researcher Agent em 2026-04-03.
+Topico: **React Server Components em 2026**
+
+## O Que Pesquisar
+Use os prompts abaixo no Claude ou NotebookLM:
+
+### Prompt 1 - Conceito
+```
+Explique React Server Components em 2026 de forma completa e didatica:
+1. O que e e para que serve
+2. Conceitos fundamentais (5-10 conceitos-chave)
+3. Como funciona internamente
+4. Casos de uso reais
+5. Exemplos praticos com codigo
+6. Vantagens e limitacoes
+7. Alternativas existentes
+8. Recursos para aprofundar
+```
+
+### Prompt 2 - Pratico
+```
+Mostre React Server Components em 2026 na pratica com exemplos de codigo TypeScript/React.
+Inclua: setup basico, casos comuns, armadilhas a evitar, boas praticas.
+```
+
+### Prompt 3 - Avancado
+```
+Quais sao os conceitos avancados de React Server Components em 2026 que um desenvolvedor senior deve dominar?
+Inclua: performance, seguranca, patterns especificos, integracao com outras ferramentas.
+```
+
+## Conexoes com Outras Notas
+- [[Claude Hub Skills]]
+- (adicionar links apos pesquisar)
+
+## Minhas Notas
+(espaco para anotar insights durante a pesquisa)
+
+## Status
+- [ ] Prompt 1 respondido
+- [ ] Prompt 2 respondido
+- [ ] Prompt 3 respondido
+- [ ] Exportado para NotebookLM
+- [ ] Conectado a notas existentes
+
+
+==================================================
+

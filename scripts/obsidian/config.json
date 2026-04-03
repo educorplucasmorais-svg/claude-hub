@@ -1,0 +1,11 @@
+{
+  "vaultPath": "C:\\Users\\Pichau\\Documents\\Obsidian\\Kaia",
+  "inboxFolder": "Inbox",
+  "notesFolder": "Notes",
+  "autoTag": true,
+  "dateFormat": "YYYY-MM-DD",
+  "defaultTemplate": "concept",
+  "syncOnSave": false,
+  "backupBeforeSync": true,
+  "claudeHubPath": "C:\\Users\\Pichau\\Desktop\\Claude Full"
+}

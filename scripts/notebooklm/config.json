@@ -1,0 +1,8 @@
+{
+  "notebookLMUrl": "https://notebooklm.google.com",
+  "defaultExportFormat": "txt",
+  "outputDir": "scripts/notebooklm/exports",
+  "autoBundle": true,
+  "includeSources": ["docs", "skills", "workflows"],
+  "claudeHubPath": "C:\\Users\\Pichau\\Desktop\\Claude Full"
+}

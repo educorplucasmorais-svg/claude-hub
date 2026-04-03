@@ -1,0 +1,65 @@
+{
+  "model": "claude-opus-4-6",
+  "theme": "auto",
+  "permissions": {
+    "allow": [
+      "Read",
+      "Write",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Bash",
+      "Agent",
+      "EnterPlanMode"
+    ]
+  },
+  "hooks": {
+    "postMessage": [
+      "powershell -ExecutionPolicy Bypass -File hooks/post-message.ps1"
+    ],
+    "preCommand": [
+      "powershell -ExecutionPolicy Bypass -File hooks/pre-command.ps1"
+    ],
+    "postCommand": [
+      "powershell -ExecutionPolicy Bypass -File hooks/post-command.ps1"
+    ]
+  },
+  "memory": {
+    "enabled": true,
+    "path": ".claude/memory"
+  },
+  "skills": {
+    "enabled": true,
+    "path": "skills",
+    "available": [
+      "code-review",
+      "debug",
+      "refactor",
+      "docs-generator",
+      "test-generator",
+      "architect",
+      "security-audit",
+      "performance",
+      "git-workflow",
+      "api-design",
+      "obsidian-sync",
+      "notebooklm-export"
+    ]
+  },
+  "integrations": {
+    "obsidian": {
+      "enabled": true,
+      "configPath": "scripts/obsidian/config.json",
+      "syncScript": "scripts/obsidian/sync-to-vault.ps1"
+    },
+    "notebooklm": {
+      "enabled": true,
+      "configPath": "scripts/notebooklm/config.json",
+      "exportScript": "scripts/notebooklm/export-to-notebooklm.ps1"
+    }
+  },
+  "workflows": {
+    "enabled": true,
+    "path": "workflows"
+  }
+}

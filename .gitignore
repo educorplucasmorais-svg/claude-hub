@@ -1,0 +1,7 @@
+# Secrets
+scripts/gemini/config.json
+outputs/
+site/node_modules/
+site/dist/
+.env
+*.env.local

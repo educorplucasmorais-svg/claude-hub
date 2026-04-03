@@ -1,0 +1,1916 @@
+﻿# Claude Hub Skills
+Exportado em: 03/04/2026 16:25
+Total de arquivos: 12
+
+==================================================
+
+## api-design.skill
+
+# 🔌 Skill: Design de APIs
+
+## Ativação
+Use quando: "API", "endpoint", "REST", "GraphQL", "contrato", "rota", "request/response"
+
+## REST API Design Principles
+
+### 1. Nomenclatura de Rotas
+```
+# Regras:
+# ✅ Substantivos (recursos), não verbos
+# ✅ Plural para coleções
+# ✅ kebab-case para múltiplas palavras
+# ✅ Hierarquia de recursos
+
+# ✅ Boas rotas
+GET    /api/users              # lista usuários
+GET    /api/users/:id          # busca usuário
+POST   /api/users              # cria usuário
+PUT    /api/users/:id          # atualiza completo
+PATCH  /api/users/:id          # atualiza parcial
+DELETE /api/users/:id          # deleta usuário
+
+GET    /api/users/:id/orders   # pedidos de um usuário
+GET    /api/orders/:id/items   # itens de um pedido
+
+# ❌ Más rotas
+POST /api/getUser
+GET  /api/createOrder
+POST /api/deleteProduct/:id
+GET  /api/UsersList
+```
+
+### 2. HTTP Status Codes
+```
+200 OK              → GET/PUT/PATCH com sucesso
+201 Created         → POST bem-sucedido
+204 No Content      → DELETE bem-sucedido
+400 Bad Request     → Input inválido (erro do cliente)
+401 Unauthorized    → Não autenticado
+403 Forbidden       → Autenticado mas sem permissão
+404 Not Found       → Recurso não existe
+409 Conflict        → Conflito (email duplicado, etc.)
+422 Unprocessable   → Entidade inválida semanticamente
+429 Too Many Req.   → Rate limit excedido
+500 Internal Server → Erro do servidor
+503 Unavailable     → Serviço temporariamente fora
+```
+
+### 3. Response Format Padrão
+```typescript
+// ✅ Sucesso com dados
+{
+  "data": { ... },
+  "meta": {
+    "total": 100,
+    "page": 1,
+    "limit": 20,
+    "totalPages": 5
+  }
+}
+
+// ✅ Sucesso com lista
+{
+  "data": [...],
+  "meta": { "total": 50, "page": 1, "limit": 20 }
+}
+
+// ✅ Erro padronizado
+{
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Email já está em uso",
+    "details": [
+      { "field": "email", "message": "Email must be unique" }
+    ]
+  }
+}
+```
+
+### 4. Implementação Express Tipada
+```typescript
+import { Router, Request, Response } from 'express'
+import { z } from 'zod'
+import { asyncHandler } from '../utils/asyncHandler'
+
+const router = Router()
+
+const createUserSchema = z.object({
+  name: z.string().min(2).max(100),
+  email: z.string().email(),
+  password: z.string().min(8)
+})
+
+// POST /api/users
+router.post('/', 
+  authenticate,
+  asyncHandler(async (req: Request, res: Response) => {
+    const body = createUserSchema.parse(req.body) // throws ZodError se inválido
+    
+    const user = await userService.create(body)
+    
+    return res.status(201).json({
+      data: toUserDTO(user) // nunca retorne entidade diretamente
+    })
+  })
+)
+
+// GET /api/users?page=1&limit=20&sort=createdAt
+router.get('/',
+  authenticate,
+  authorize('admin'),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { page = '1', limit = '20', sort = 'createdAt' } = req.query
+    
+    const { users, total } = await userService.findAll({
+      page: Number(page),
+      limit: Math.min(Number(limit), 100), // máximo 100
+      sort: String(sort)
+    })
+    
+    return res.json({
+      data: users.map(toUserDTO),
+      meta: {
+        total,
+        page: Number(page),
+        limit: Number(limit),
+        totalPages: Math.ceil(total / Number(limit))
+      }
+    })
+  })
+)
+```
+
+### 5. Versionamento de API
+```
+# URL versioning (mais simples, recomendado)
+/api/v1/users
+/api/v2/users
+
+# Header versioning
+Accept: application/vnd.myapi.v2+json
+
+# Estratégia de deprecação:
+# 1. Anunciar deprecação com 6 meses de antecedência
+# 2. Header de aviso: Deprecation: true, Sunset: data
+# 3. Manter versão antiga por pelo menos 1 ano
+```
+
+### 6. Rate Limiting
+```typescript
+import rateLimit from 'express-rate-limit'
+
+// Global
+app.use(rateLimit({ windowMs: 15*60*1000, max: 100 }))
+
+// Endpoints sensíveis
+const strictLimit = rateLimit({ windowMs: 60*1000, max: 5 })
+app.use('/api/auth', strictLimit)
+app.use('/api/payments', strictLimit)
+```
+
+### 7. DTO Pattern
+```typescript
+// Nunca exponha entidades diretamente
+interface UserDTO {
+  id: string
+  name: string
+  email: string
+  createdAt: string
+  // ❌ sem: password, refreshToken, etc.
+}
+
+function toUserDTO(user: User): UserDTO {
+  return {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    createdAt: user.createdAt.toISOString()
+  }
+}
+```
+
+### Regras desta Skill
+- Contratos imutáveis: não quebre clientes existentes
+- Sempre versione antes de fazer breaking changes
+- DTOs em todas as responses (nunca entidades brutas)
+- Rate limit em endpoints de autenticação e pagamento
+- OpenAPI/Swagger atualizado junto com o código
+
+
+==================================================
+
+## architect.skill
+
+# 🏗️ Skill: Arquiteto de Software
+
+## Ativação
+Use quando: "arquitetura", "design do sistema", "como estruturar", "padrão de projeto", "modelar"
+
+## Framework de Decisão Arquitetural
+
+### 1. Perguntas Fundamentais (sempre responder primeiro)
+1. **Scale**: Quantos usuários? Dados? Requisições/s?
+2. **Consistency**: CAP theorem — consistência ou disponibilidade?
+3. **Team**: Tamanho do time? Experiência? Velocidade de entrega?
+4. **Budget**: Custo de infra permitido?
+5. **Complexity**: CRUD simples ou lógica de domínio complexa?
+
+### 2. Quando Usar Cada Arquitetura
+
+| Arquitetura | Use quando | Evite quando |
+|-------------|-----------|--------------|
+| **Monolito** | Time pequeno, MVP, CRUD simples | Escala massiva, times grandes |
+| **Modular Monolith** | Time médio, domínio complexo | Precisa escalar componentes independentemente |
+| **Microservices** | Times autônomos, escala independente | Time pequeno, sem DevOps maduro |
+| **Event-Driven** | Processos assíncronos, integrações | Transações síncronas simples |
+| **Serverless** | Picos de carga, baixo custo fixo | Latência crítica, estado persistente |
+
+### 3. Estrutura de Projeto (Clean Architecture)
+```
+src/
+├── domain/              # Regras de negócio puras (sem dependências externas)
+│   ├── entities/        # Entidades e Value Objects
+│   ├── repositories/    # Interfaces (contratos)
+│   └── services/        # Domain Services
+│
+├── application/         # Casos de uso da aplicação
+│   ├── use-cases/       # Um arquivo por caso de uso
+│   ├── dtos/            # Data Transfer Objects
+│   └── ports/           # Interfaces de entrada/saída
+│
+├── infrastructure/      # Implementações concretas
+│   ├── database/        # Prisma, repositórios concretos
+│   ├── http/            # Controllers, middlewares, routes
+│   ├── external/        # APIs externas (Stripe, SendGrid)
+│   └── cache/           # Redis, memória
+│
+└── shared/              # Utilitários transversais
+    ├── errors/          # Classes de erro customizadas
+    ├── validators/      # Zod schemas
+    └── types/           # TypeScript shared types
+```
+
+### 4. Modelagem de Dados
+
+#### Domain-Driven Design (DDD) Básico
+```typescript
+// Entidade: tem identidade
+class Order {
+  private id: OrderId
+  private items: OrderItem[]
+  private status: OrderStatus
+  
+  addItem(product: Product, qty: number): void { ... }
+  confirm(): void { ... }
+  cancel(): void { ... }
+}
+
+// Value Object: sem identidade, imutável
+class Money {
+  constructor(
+    readonly amount: number,
+    readonly currency: 'BRL' | 'USD'
+  ) {
+    if (amount < 0) throw new Error('Amount cannot be negative')
+  }
+  
+  add(other: Money): Money {
+    if (this.currency !== other.currency) throw new Error('Currency mismatch')
+    return new Money(this.amount + other.amount, this.currency)
+  }
+}
+```
+
+### 5. Diagramas (Mermaid)
+
+#### C4 Model - Level 1 (System Context)
+```mermaid
+graph TB
+    User((Usuário))
+    System[Sistema Principal]
+    DB[(MySQL)]
+    Stripe[Stripe API]
+    Email[SendGrid]
+    
+    User -->|HTTP/HTTPS| System
+    System -->|Queries| DB
+    System -->|Pagamentos| Stripe
+    System -->|Emails| Email
+```
+
+#### Fluxo de Dados
+```mermaid
+sequenceDiagram
+    Client->>API: POST /orders
+    API->>Validator: validateOrder(data)
+    Validator-->>API: validated DTO
+    API->>UseCase: createOrder(dto)
+    UseCase->>Repository: save(order)
+    Repository->>DB: INSERT
+    DB-->>Repository: order_id
+    UseCase->>EventBus: publish(OrderCreated)
+    EventBus-->>EmailService: send confirmation
+    UseCase-->>API: OrderDTO
+    API-->>Client: 201 Created
+```
+
+### 6. Checklist de Design Review
+- [ ] Single Responsibility: cada módulo tem um propósito?
+- [ ] Dependency Direction: apontam para o domínio (não para fora)?
+- [ ] Testabilidade: posso testar o domínio sem DB/HTTP?
+- [ ] Extensibilidade: posso adicionar features sem quebrar existentes?
+- [ ] Performance: N+1 queries? Índices no DB?
+
+### Regras desta Skill
+- "Make it work, make it right, make it fast" (nessa ordem)
+- Complexidade zero: a arquitetura mais simples que resolve o problema
+- ADR para cada decisão importante
+- Mostre trade-offs, não só a decisão final
+
+
+==================================================
+
+## code-review.skill
+
+# 🔍 Skill: Code Review Senior
+
+## Ativação
+Use quando: "revisar código", "code review", "analisar código", "checar qualidade"
+
+## Protocolo de Revisão
+
+### 1. Análise Estrutural
+- Leia TODO o código antes de comentar
+- Mapeie dependências e fluxo de dados
+- Identifique padrões e anti-padrões
+
+### 2. Checklist de Revisão (OBRIGATÓRIO)
+
+#### 🐛 Bugs & Lógica
+- [ ] Race conditions ou problemas de concorrência?
+- [ ] Null/undefined não tratados?
+- [ ] Loops infinitos ou recursão sem base?
+- [ ] Comparações incorretas (== vs ===)?
+- [ ] Lógica de negócio correta?
+
+#### 🔐 Segurança
+- [ ] SQL Injection / XSS / CSRF vulnerável?
+- [ ] Secrets hardcoded?
+- [ ] Inputs validados e sanitizados?
+- [ ] Autenticação/autorização correta?
+- [ ] Dados sensíveis expostos em logs?
+
+#### ⚡ Performance
+- [ ] N+1 queries?
+- [ ] Operações bloqueantes desnecessárias?
+- [ ] Memória: leaks ou uso excessivo?
+- [ ] Caching onde necessário?
+- [ ] Algoritmos O(n²) onde O(n) é possível?
+
+#### 🏗️ Arquitetura & Clean Code
+- [ ] SRP: cada função/classe tem uma responsabilidade?
+- [ ] DRY: código duplicado?
+- [ ] Nomes descritivos (funções, variáveis, classes)?
+- [ ] Funções com mais de 20 linhas (refatorar)?
+- [ ] Comentários desnecessários (código auto-explicativo)?
+
+#### 🧪 Testabilidade
+- [ ] Funções puras vs side effects isolados?
+- [ ] Dependências injetáveis (DI)?
+- [ ] Casos extremos cobertos?
+
+### 3. Formato de Saída
+
+```
+## 📋 Code Review Report
+
+### ✅ Pontos Positivos
+- ...
+
+### 🚨 Críticos (devem ser corrigidos)
+1. **[TIPO]** Arquivo:linha — Descrição + Fix sugerido
+
+### ⚠️ Importantes (recomendam correção)
+1. **[TIPO]** Arquivo:linha — Descrição + Fix sugerido
+
+### 💡 Sugestões (melhorias opcionais)
+1. ...
+
+### 📊 Score: X/10
+**Resumo:** ...
+```
+
+### 4. Regras desta Skill
+- NUNCA seja vago: sempre diga ONDE e COMO corrigir
+- Forneça snippets de código corrigido
+- Priorize: Segurança > Bugs > Performance > Style
+- Se o código for TypeScript, verifique tipos strict
+
+
+==================================================
+
+## debug.skill
+
+# 🐛 Skill: Debug Sistemático
+
+## Ativação
+Use quando: "não funciona", "erro", "bug", "quebrado", "exception", "undefined", "debug"
+
+## Protocolo de Debug (5-Why + Binary Search)
+
+### Fase 1: Coleta de Evidências
+Sempre pergunte/colete:
+1. **Mensagem de erro exata** (stack trace completo)
+2. **Comportamento esperado** vs **comportamento atual**
+3. **Quando começou** (último commit? deploy? mudança de config?)
+4. **Ambiente** (dev/staging/prod? OS? versão Node/Browser?)
+5. **Reproduce steps** (passo a passo para reproduzir)
+
+### Fase 2: Hipóteses (ordenadas por probabilidade)
+```
+🎯 Hipótese 1: [mais provável] — Evidência: X
+🎯 Hipótese 2: [provável]     — Evidência: Y  
+🎯 Hipótese 3: [possível]     — Evidência: Z
+```
+
+### Fase 3: Investigação Sistemática
+```
+search/codebase → localizar arquivo relevante
+↓
+Ler código → identificar fluxo de execução
+↓
+Adicionar logging estratégico (temporário)
+↓
+Isolar componente → reproduzir em isolamento
+↓
+Binary search: dividir código ao meio para localizar origem
+```
+
+### Fase 4: Root Cause Analysis (RCA)
+- Qual é o problema REAL (não o sintoma)?
+- Por que aconteceu?
+- Por que não foi detectado antes?
+- Como prevenir no futuro?
+
+### Fase 5: Fix + Verificação
+```typescript
+// ❌ Código com bug (antes)
+// [mostrar código original]
+
+// ✅ Código corrigido (depois)
+// [mostrar correção com explicação]
+```
+
+Após fix:
+- [ ] Rode testes existentes
+- [ ] Adicione teste para o bug específico
+- [ ] Verifique se fix não introduz regressão
+
+### Padrões de Bug Comuns
+
+#### JavaScript/TypeScript
+```
+- TypeError: Cannot read property X of undefined
+  → Null check faltando: obj?.prop ou if (obj && obj.prop)
+  
+- Promise rejected sem .catch()
+  → Adicionar try/catch em async/await
+  
+- Stale closure em React hooks
+  → Verificar array de dependências useEffect/useCallback
+  
+- Memory leak
+  → Cleanup no return do useEffect
+```
+
+#### Node.js / Express
+```
+- ECONNREFUSED → serviço não está rodando / porta errada
+- ETIMEDOUT → firewall, rede, ou timeout muito curto
+- EADDRINUSE → porta já ocupada: lsof -i :PORT
+```
+
+### Comandos de Debug Úteis
+```bash
+# Ver logs em tempo real
+tail -f logs/app.log
+
+# Verificar porta em uso
+netstat -ano | findstr :3000   # Windows
+lsof -i :3000                  # Mac/Linux
+
+# Verificar variáveis de ambiente
+node -e "console.log(process.env)"
+
+# TypeScript: verificar tipos
+npx tsc --noEmit
+```
+
+### Regras desta Skill
+- NUNCA assuma a causa sem evidências
+- Sempre reproduza o bug antes de corrigir
+- Fix minimal: mude o mínimo necessário
+- Documente a causa raiz no comentário do commit
+
+
+==================================================
+
+## docs-generator.skill
+
+# 📚 Skill: Gerador de Documentação
+
+## Ativação
+Use quando: "documentar", "gerar docs", "README", "JSDoc", "comentar código", "ADR"
+
+## Tipos de Documentação
+
+### 1. JSDoc / TSDoc (Código)
+```typescript
+/**
+ * Processa o pagamento de um pedido via gateway externo.
+ * 
+ * @param orderId - ID único do pedido
+ * @param paymentData - Dados do pagamento (cartão/PIX/boleto)
+ * @param options - Opções adicionais de processamento
+ * @returns Promise com resultado do pagamento e transactionId
+ * @throws {PaymentError} Se o gateway rejeitar o pagamento
+ * @throws {OrderNotFoundError} Se o pedido não existir
+ * 
+ * @example
+ * ```typescript
+ * const result = await processPayment('order-123', {
+ *   method: 'credit_card',
+ *   amount: 99.90,
+ *   currency: 'BRL'
+ * })
+ * console.log(result.transactionId) // 'txn_abc123'
+ * ```
+ */
+async function processPayment(
+  orderId: string,
+  paymentData: PaymentDTO,
+  options?: PaymentOptions
+): Promise<PaymentResult>
+```
+
+### 2. README.md Template
+```markdown
+# 🚀 Nome do Projeto
+
+> Descrição em uma linha do que o projeto faz.
+
+## ✨ Features
+- Feature 1
+- Feature 2
+
+## 🛠️ Tech Stack
+- **Frontend:** React 18, TypeScript, TailwindCSS
+- **Backend:** Node.js, Express
+- **DB:** MySQL + Prisma
+- **Infra:** Vercel, Hostinger
+
+## 📦 Instalação
+
+\`\`\`bash
+git clone https://github.com/user/projeto
+cd projeto
+npm install
+cp .env.example .env
+npm run dev
+\`\`\`
+
+## 🔧 Variáveis de Ambiente
+
+| Variável | Descrição | Obrigatório |
+|----------|-----------|-------------|
+| DATABASE_URL | URL do banco MySQL | ✅ |
+| JWT_SECRET | Secret para tokens | ✅ |
+| STRIPE_KEY | Chave API Stripe | ✅ |
+
+## 📋 Scripts
+
+| Comando | Descrição |
+|---------|-----------|
+| `npm run dev` | Desenvolvimento |
+| `npm run build` | Build produção |
+| `npm test` | Rodar testes |
+| `npm run lint` | Verificar código |
+
+## 📁 Estrutura do Projeto
+\`\`\`
+src/
+├── components/    # Componentes React
+├── pages/         # Páginas/rotas
+├── hooks/         # Custom hooks
+├── services/      # Lógica de negócio
+├── types/         # TypeScript types
+└── utils/         # Utilitários
+\`\`\`
+
+## 🤝 Contribuindo
+1. Fork o projeto
+2. Crie uma branch: `git checkout -b feature/nova-feature`
+3. Commit: `git commit -m 'feat: adiciona nova feature'`
+4. Push: `git push origin feature/nova-feature`
+5. Abra um Pull Request
+
+## 📄 Licença
+MIT
+```
+
+### 3. ADR (Architecture Decision Record)
+```markdown
+# ADR-001: Título da Decisão
+
+**Data:** YYYY-MM-DD  
+**Status:** Accepted | Proposed | Deprecated  
+**Deciders:** Nome dos envolvidos
+
+## Contexto
+Por que esta decisão foi necessária?
+
+## Opções Consideradas
+1. Opção A — Prós/Contras
+2. Opção B — Prós/Contras
+3. **Opção C (Escolhida)** — Prós/Contras
+
+## Decisão
+Escolhemos X porque Y.
+
+## Consequências
+- ✅ Positivas: ...
+- ⚠️ Trade-offs: ...
+```
+
+### 4. API Documentation (OpenAPI/Swagger)
+```yaml
+# Para cada endpoint, documente:
+GET /api/users/{id}:
+  summary: Busca usuário por ID
+  parameters:
+    - name: id (string, required)
+  responses:
+    200: UserDTO
+    404: Not Found
+    401: Unauthorized
+```
+
+### Regras desta Skill
+- Exemplos sempre com código real (não pseudocódigo)
+- Parâmetros obrigatórios x opcionais claramente marcados
+- Erros possíveis sempre documentados
+- README deve permitir que novo dev rode o projeto em < 5 min
+
+
+==================================================
+
+## git-workflow.skill
+
+# 🌿 Skill: Git Workflow Profissional
+
+## Ativação
+Use quando: "commit", "git", "branch", "PR", "merge", "release", "versionamento"
+
+## Conventional Commits (Padrão Obrigatório)
+
+### Formato
+```
+<tipo>(escopo opcional): descrição curta
+
+[corpo opcional - o que e por quê]
+
+[rodapé opcional - BREAKING CHANGE, referencias]
+```
+
+### Tipos
+| Tipo | Quando usar | Versão |
+|------|-------------|--------|
+| `feat` | Nova funcionalidade | MINOR |
+| `fix` | Correção de bug | PATCH |
+| `docs` | Apenas documentação | - |
+| `style` | Formatação, sem lógica | - |
+| `refactor` | Refatoração sem feat/fix | - |
+| `test` | Adicionar/corrigir testes | - |
+| `chore` | Build, deps, configs | - |
+| `perf` | Melhoria de performance | PATCH |
+| `ci` | CI/CD | - |
+| `revert` | Reverter commit | - |
+
+### Exemplos
+```bash
+# ✅ Bons commits
+git commit -m "feat(auth): adiciona autenticação com Google OAuth"
+git commit -m "fix(payment): corrige cálculo de desconto para cupons vencidos"
+git commit -m "perf(api): adiciona índice na coluna user_id da tabela orders"
+git commit -m "docs(readme): atualiza guia de instalação com Docker"
+
+# ❌ Commits ruins
+git commit -m "fix bug"
+git commit -m "update"
+git commit -m "WIP"
+git commit -m "changes"
+```
+
+## Branching Strategy (Git Flow Simplificado)
+
+### Estrutura de Branches
+```
+main          ← produção (sempre estável)
+├── develop   ← integração (branch base para dev)
+│   ├── feature/nome-da-feature
+│   ├── fix/nome-do-bug
+│   └── refactor/nome-do-que-refatora
+└── hotfix/nome-do-hotfix  ← direto da main
+```
+
+### Fluxo de Trabalho
+```bash
+# 1. Nova feature
+git checkout develop
+git pull origin develop
+git checkout -b feature/user-profile-page
+
+# 2. Desenvolvendo
+git add -p  # staging interativo (revise o que está adicionando)
+git commit -m "feat(profile): adiciona componente UserAvatar"
+git commit -m "feat(profile): implementa upload de foto"
+
+# 3. Atualizar com develop (rebase para histórico limpo)
+git fetch origin
+git rebase origin/develop
+
+# 4. Push e PR
+git push origin feature/user-profile-page
+# Abrir PR no GitHub → develop
+```
+
+### Pull Request Template
+```markdown
+## 📋 Descrição
+O que essa PR faz?
+
+## 🎯 Tipo de Mudança
+- [ ] Nova feature
+- [ ] Bug fix
+- [ ] Refatoração
+- [ ] Documentação
+
+## 🧪 Como Testar
+1. Passo 1
+2. Passo 2
+
+## 📸 Screenshots (se UI)
+
+## ✅ Checklist
+- [ ] Testes passando: `npm test`
+- [ ] Lint OK: `npm run lint`
+- [ ] Build OK: `npm run build`
+- [ ] Self-review feito
+```
+
+## Git Hooks com Husky
+
+### Setup
+```bash
+npm install --save-dev husky lint-staged commitlint @commitlint/config-conventional
+
+# Ativar husky
+npx husky init
+```
+
+### Pre-commit Hook
+```bash
+# .husky/pre-commit
+#!/bin/sh
+npx lint-staged
+```
+
+### Commit-msg Hook
+```bash
+# .husky/commit-msg
+#!/bin/sh
+npx --no -- commitlint --edit $1
+```
+
+### lint-staged Config
+```json
+// package.json
+{
+  "lint-staged": {
+    "*.{ts,tsx}": ["eslint --fix", "prettier --write"],
+    "*.{md,json}": ["prettier --write"]
+  }
+}
+```
+
+## Comandos Úteis
+```bash
+# Ver log bonito
+git log --oneline --graph --all
+
+# Stash com nome
+git stash push -m "WIP: feature X"
+git stash list
+git stash pop stash@{0}
+
+# Amend (corrigir último commit)
+git commit --amend --no-edit
+git commit --amend -m "feat: nova mensagem"
+
+# Squash últimos 3 commits
+git rebase -i HEAD~3
+
+# Cherry-pick commit específico
+git cherry-pick <commit-hash>
+
+# Desfazer último commit (manter mudanças)
+git reset --soft HEAD~1
+
+# Reverter commit público
+git revert <commit-hash>
+```
+
+### Regras desta Skill
+- NUNCA commit direto na main ou develop
+- SEMPRE usar Conventional Commits
+- PRs pequenas e focadas (uma responsabilidade)
+- Code review obrigatório antes de merge
+- Secrets NUNCA no git (use .env + .gitignore)
+
+
+==================================================
+
+## notebooklm-export.skill
+
+# 📚 Skill: Integração NotebookLM
+
+## Ativação
+Use quando: "NotebookLM", "exportar para NotebookLM", "fonte de pesquisa", "notebook google"
+
+## O que é NotebookLM
+Google NotebookLM é uma ferramenta de pesquisa e notetaking com IA que:
+- Cria podcasts de áudio a partir das suas fontes
+- Faz Q&A sobre documentos específicos
+- Gera resumos, briefings e FAQs
+- Conecta múltiplas fontes num único notebook
+
+## Como Funciona Esta Integração
+
+### Formatos Aceitos pelo NotebookLM
+| Formato | Suporte | Recomendação |
+|---------|---------|--------------|
+| `.txt` | ✅ Nativo | **Melhor para texto puro** |
+| `.md` | ✅ Nativo | Bom para documentação |
+| PDF | ✅ Nativo | Para documentos formatados |
+| Google Doc | ✅ Nativo | Para colaboração |
+| URLs | ✅ Nativo | Para páginas web |
+| `.docx` | ✅ Nativo | Para documentos Word |
+
+### Workflow de Exportação
+
+#### Opção 1: Via Script (Recomendado)
+```powershell
+# Exportar documento específico
+.\scripts\notebooklm\export-to-notebooklm.ps1 -InputPath ".\docs\meu-artigo.md"
+
+# Exportar TUDO como bundle único (melhor para NotebookLM)
+.\scripts\notebooklm\export-to-notebooklm.ps1 -Bundle
+
+# Abrir pasta de exports automaticamente
+.\scripts\notebooklm\export-to-notebooklm.ps1 -Bundle -OpenOutputFolder
+```
+
+#### Opção 2: Copiar/Colar
+Para conteúdo de conversa Claude, formatar assim:
+```
+# [Título do Documento]
+Data: DD/MM/YYYY
+Fonte: Claude Hub
+
+[Conteúdo aqui — bem estruturado, sem markdown complexo]
+
+## Seção 1
+[texto]
+
+## Seção 2  
+[texto]
+```
+
+## Tipos de Fontes para NotebookLM
+
+### 1. Fonte de Pesquisa (Research Brief)
+```
+# Pesquisa: [Tema]
+
+## Resumo Executivo
+[2-3 parágrafos]
+
+## Pontos Principais
+1. ...
+2. ...
+3. ...
+
+## Análise Detalhada
+[texto]
+
+## Conclusões
+[texto]
+
+## Perguntas para Aprofundar
+- Como X impacta Y?
+- Qual é a diferença entre A e B?
+```
+
+### 2. Base de Conhecimento Técnico
+```
+# Documentação Técnica: [Sistema/Tecnologia]
+
+## Visão Geral
+[o que é e para que serve]
+
+## Arquitetura
+[como funciona]
+
+## Componentes Principais
+[lista e descrição]
+
+## Como Usar
+[passo a passo]
+
+## Casos de Uso Comuns
+[exemplos práticos]
+
+## Troubleshooting
+[problemas comuns e soluções]
+```
+
+### 3. Atas e Decisões de Projeto
+```
+# Decisões do Projeto: [Nome do Projeto]
+
+## Decisão 1: [Título]
+Data: YYYY-MM-DD
+Status: Aprovado | Em discussão
+
+### Contexto
+[por que precisávamos decidir]
+
+### Opções Avaliadas
+- Opção A: [pros/contras]
+- Opção B: [pros/contras]
+
+### Decisão Tomada
+[o que foi decidido e por quê]
+
+### Impacto
+[consequências]
+```
+
+## Melhores Práticas para NotebookLM
+
+### ✅ Faça
+- Use texto limpo e bem estruturado com cabeçalhos
+- Um tópico por documento (melhora Q&A)
+- Inclua contexto sobre quando/por que foi criado
+- Use linguagem clara, evite jargão excessivo
+- Divida documentos grandes (> 50 páginas) em partes
+- Inclua exemplos concretos
+
+### ❌ Evite
+- Markdown pesado com tabelas complexas (prefira texto)
+- Código fonte bruto sem explicação
+- Imagens (NotebookLM não processa imagens em PDFs)
+- Metadados desnecessários no início
+- Conteúdo confidencial (dados pessoais, senhas)
+
+## Geração de Podcast com NotebookLM
+
+Após carregar suas fontes:
+1. Clique em "Audio Overview" 
+2. Customize o prompt: *"Faça um podcast de 10 minutos explicando [tema] para desenvolvedores"*
+3. Aguarde geração (2-5 minutos)
+4. Use para revisão, onboarding ou estudo
+
+## Integração com Obsidian
+
+Para sync bidirecional:
+```
+Claude Hub → Export → NotebookLM Fontes
+     ↓
+NotebookLM Insights → Claude Hub docs/ → Obsidian Sync
+```
+
+### Regras desta Skill
+- Sempre limpar markdown antes de exportar
+- Bundle de múltiplos docs é melhor que muitos docs pequenos
+- Incluir contexto temporal (data) em todas as fontes
+- Nunca incluir dados sensíveis/pessoais nas fontes
+
+
+==================================================
+
+## obsidian-sync.skill
+
+# 🗒️ Skill: Integração Obsidian
+
+## Ativação
+Use quando: "salvar no Obsidian", "criar nota", "Obsidian", "vault", "nota de conhecimento", "knowledge base"
+
+## Como Funciona
+Esta skill formata qualquer conteúdo como nota Obsidian válida com:
+- **Frontmatter YAML** (metadados, tags, links)
+- **Wikilinks** [[como esses]] para conexões entre notas
+- **Dataview queries** para dashboards dinâmicos
+- **Templates** padronizados por tipo de nota
+
+## Templates de Nota
+
+### 1. Nota de Conhecimento (Evergreen Note)
+```markdown
+---
+title: "Título da Nota"
+created: {{date:YYYY-MM-DD}}
+modified: {{date:YYYY-MM-DD}}
+tags:
+  - type/concept
+  - topic/tecnologia
+  - status/in-progress
+aliases:
+  - "Nome alternativo"
+source: "URL ou referência"
+---
+
+# Título da Nota
+
+> 💡 **Resumo em uma frase**
+
+## O que é
+...
+
+## Por que importa
+...
+
+## Como usar
+...
+
+## Conexões
+- Relacionado com: [[Outra Nota]]
+- Parte de: [[Área de Conhecimento]]
+- Contrasta com: [[Conceito Oposto]]
+
+## Referências
+- [Link 1](url)
+```
+
+### 2. Nota de Projeto
+```markdown
+---
+title: "Nome do Projeto"
+created: {{date:YYYY-MM-DD}}
+status: active | on-hold | completed | cancelled
+type: project
+tags:
+  - type/project
+  - area/desenvolvimento
+due: YYYY-MM-DD
+---
+
+# 🚀 Nome do Projeto
+
+## Objetivo
+O que este projeto vai alcançar?
+
+## Por que agora?
+Motivação e contexto.
+
+## Critérios de Sucesso
+- [ ] Critério 1
+- [ ] Critério 2
+
+## Tarefas
+- [ ] Task 1 📅 YYYY-MM-DD
+- [ ] Task 2
+
+## Notas e Decisões
+### YYYY-MM-DD
+...
+
+## Recursos
+- [[Nota Relacionada]]
+- [Documentação](url)
+```
+
+### 3. Nota de Reunião / Daily
+```markdown
+---
+date: {{date:YYYY-MM-DD}}
+type: meeting | daily
+participants: []
+tags:
+  - type/meeting
+  - project/nome
+---
+
+# 📅 Reunião - {{date:DD/MM/YYYY}}
+
+**Participantes:** ...
+**Objetivo:** ...
+
+## Discussões
+...
+
+## Decisões Tomadas
+1. ...
+
+## Ações
+- [ ] @pessoa — Ação até 📅 data
+
+## Próxima Reunião
+...
+```
+
+### 4. Nota de Código / Snippet
+```markdown
+---
+title: "Nome do Snippet"
+language: typescript | python | sql | bash
+tags:
+  - type/snippet
+  - topic/react
+  - topic/hooks
+created: {{date:YYYY-MM-DD}}
+---
+
+# 💻 Nome do Snippet
+
+## Contexto
+Quando usar este código?
+
+## Código
+\`\`\`typescript
+// código aqui
+\`\`\`
+
+## Como Funciona
+Explicação...
+
+## Variações
+...
+
+## Armadilhas
+...
+
+## Referências
+- [[Documentação Relacionada]]
+```
+
+### 5. Nota de Pesquisa / Aprendizado
+```markdown
+---
+title: "O que aprendi sobre X"
+source: "URL, livro, curso"
+created: {{date:YYYY-MM-DD}}
+tags:
+  - type/learning
+  - topic/assunto
+  - status/processed
+---
+
+# 📖 Título do Aprendizado
+
+## Fonte
+...
+
+## Principais Insights
+1. ...
+2. ...
+
+## Perguntas Geradas
+- Como X se conecta com Y?
+- Por que Z funciona assim?
+
+## Aplicações Práticas
+...
+
+## Conexões com Notas Existentes
+- [[Nota A]] — porque X
+- [[Nota B]] — porque Y
+```
+
+## Estrutura Recomendada do Vault
+
+```
+Vault/
+├── 📥 Inbox/           # Capturas brutas (processar depois)
+├── 🗒️ Notes/
+│   ├── Concepts/       # Notas evergreen de conceitos
+│   ├── Projects/       # Notas de projeto
+│   ├── Meetings/       # Atas e reuniões
+│   └── Snippets/       # Código e exemplos
+├── 📚 Resources/       # Referências e fontes
+├── 🏗️ Areas/          # Áreas de responsabilidade
+├── 📁 Archive/         # Itens completados/obsoletos
+└── 🧰 Templates/       # Templates das notas acima
+```
+
+## Convenções de Tags
+```
+type/concept     → Conceito ou definição
+type/project     → Projeto ativo
+type/meeting     → Atas de reunião
+type/snippet     → Código reutilizável
+type/learning    → Aprendizado de fonte externa
+
+status/raw       → Capturado, não processado
+status/in-progress → Em desenvolvimento
+status/processed → Processado e conectado
+
+area/dev         → Desenvolvimento
+area/design      → Design e UX
+area/business    → Negócio e estratégia
+```
+
+## Script de Sincronização
+> Veja: `scripts/obsidian/sync-to-vault.ps1`
+> Para configurar o caminho do vault, edite `scripts/obsidian/config.json`
+
+### Regras desta Skill
+- Toda nota deve ter frontmatter completo
+- Usar wikilinks [[]] para conectar notas relacionadas
+- Tags seguem taxonomia definida acima
+- Notas atômicas: um conceito por nota
+- Títulos como afirmações (não perguntas)
+
+
+==================================================
+
+## performance.skill
+
+# ⚡ Skill: Otimização de Performance
+
+## Ativação
+Use quando: "lento", "performance", "otimizar", "lag", "timeout", "N+1", "cache", "otimização"
+
+## Frontend Performance
+
+### Core Web Vitals (metas 2026)
+| Métrica | Bom | Precisa Melhorar | Ruim |
+|---------|-----|-----------------|------|
+| LCP (maior conteúdo) | < 2.5s | 2.5-4s | > 4s |
+| FID/INP (interatividade) | < 200ms | 200-500ms | > 500ms |
+| CLS (estabilidade visual) | < 0.1 | 0.1-0.25 | > 0.25 |
+
+### Técnicas React
+
+#### Code Splitting & Lazy Loading
+```typescript
+// ❌ Importa tudo na bundle inicial
+import { HeavyDashboard } from './HeavyDashboard'
+
+// ✅ Carrega só quando necessário
+const HeavyDashboard = lazy(() => import('./HeavyDashboard'))
+
+function App() {
+  return (
+    <Suspense fallback={<Skeleton />}>
+      <HeavyDashboard />
+    </Suspense>
+  )
+}
+```
+
+#### Memoização Correta
+```typescript
+// ✅ memo para componentes com re-renders caros
+const ProductCard = memo(({ product }: { product: Product }) => (
+  <div>{product.name}</div>
+), (prev, next) => prev.product.id === next.product.id)
+
+// ✅ useMemo para cálculos pesados
+const sortedProducts = useMemo(
+  () => products.sort((a, b) => a.price - b.price),
+  [products]
+)
+
+// ✅ useCallback para funções passadas como props
+const handleClick = useCallback((id: string) => {
+  onSelect(id)
+}, [onSelect])
+```
+
+#### Virtualização de Listas
+```typescript
+// Para listas com 100+ itens
+import { FixedSizeList } from 'react-window'
+
+<FixedSizeList
+  height={600}
+  itemCount={products.length}
+  itemSize={80}
+>
+  {({ index, style }) => (
+    <ProductRow style={style} product={products[index]} />
+  )}
+</FixedSizeList>
+```
+
+### Bundle Optimization (Vite)
+```typescript
+// vite.config.ts
+export default {
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vendor: ['react', 'react-dom'],
+          utils: ['lodash', 'date-fns'],
+        }
+      }
+    }
+  }
+}
+```
+
+## Backend Performance
+
+### N+1 Query Problem
+```typescript
+// ❌ N+1: 1 query para orders + N queries para cada user
+const orders = await prisma.order.findMany()
+for (const order of orders) {
+  order.user = await prisma.user.findById(order.userId) // N queries!
+}
+
+// ✅ Include: 1 query com JOIN
+const orders = await prisma.order.findMany({
+  include: { user: true }
+})
+
+// ✅ Para casos complexos: DataLoader (batching)
+```
+
+### Caching Strategy
+```typescript
+// Redis para dados frequentes e caros
+class UserService {
+  async findById(id: string): Promise<User> {
+    const cached = await redis.get(`user:${id}`)
+    if (cached) return JSON.parse(cached)
+    
+    const user = await this.userRepo.findById(id)
+    await redis.setex(`user:${id}`, 3600, JSON.stringify(user)) // TTL: 1h
+    return user
+  }
+
+  async updateUser(id: string, data: UpdateUserDTO): Promise<User> {
+    const user = await this.userRepo.update(id, data)
+    await redis.del(`user:${id}`) // Invalidar cache
+    return user
+  }
+}
+```
+
+### HTTP Response Optimization
+```typescript
+// ✅ Compressão
+import compression from 'compression'
+app.use(compression())
+
+// ✅ Paginação sempre
+app.get('/api/products', async (req, res) => {
+  const { page = 1, limit = 20 } = req.query
+  const products = await prisma.product.findMany({
+    skip: (Number(page) - 1) * Number(limit),
+    take: Number(limit)
+  })
+  res.json({ data: products, page, limit })
+})
+```
+
+## Database Performance
+
+### Índices Estratégicos
+```sql
+-- Para campos usados em WHERE frequentes
+CREATE INDEX idx_orders_user_id ON orders(user_id);
+CREATE INDEX idx_orders_created_at ON orders(created_at DESC);
+
+-- Índice composto para queries compostas
+CREATE INDEX idx_products_category_price 
+ON products(category_id, price);
+
+-- Verificar queries lentas
+EXPLAIN ANALYZE SELECT * FROM orders WHERE user_id = 1;
+```
+
+### Query Optimization
+```typescript
+// ✅ Selecione apenas campos necessários
+const users = await prisma.user.findMany({
+  select: { id: true, name: true, email: true } // não traga senha, etc.
+})
+
+// ✅ Use count ao invés de findMany para contagem
+const total = await prisma.order.count({ where: { status: 'pending' } })
+```
+
+## Ferramentas de Análise
+```bash
+# Lighthouse CI
+npx lighthouse https://meusite.com --output json
+
+# Bundle analyzer
+npx vite-bundle-visualizer
+
+# Node.js profiling
+node --prof app.js
+node --prof-process isolate-*.log
+
+# DB slow query log (MySQL)
+SET GLOBAL slow_query_log = 'ON';
+SET GLOBAL long_query_time = 1;
+```
+
+### Regras desta Skill
+- Meça ANTES de otimizar (profiling first)
+- Otimização prematura é a raiz de todo mal
+- Cache com invalidação correta vale mais que qualquer outra otimização
+- Database: índices são a maior alavanca de performance
+
+
+==================================================
+
+## refactor.skill
+
+# ♻️ Skill: Refatoração Sistemática
+
+## Ativação
+Use quando: "refatorar", "melhorar código", "limpar código", "clean code", "reorganizar"
+
+## Princípios Aplicados (Ordem de Prioridade)
+
+### 1. Análise Antes de Refatorar
+- [ ] O código tem testes? Se não → escreva antes de refatorar
+- [ ] Qual é o comportamento atual (contratos)?
+- [ ] Qual é o smell principal?
+- [ ] Qual é o risco de quebrar algo?
+
+### 2. Code Smells → Soluções
+
+#### 🍝 Código Espaguete / Função longa
+```typescript
+// ❌ Antes: função com 50+ linhas fazendo tudo
+async function processOrder(data: any) {
+  // valida...
+  // salva no DB...
+  // envia email...
+  // atualiza estoque...
+  // notifica...
+}
+
+// ✅ Depois: cada responsabilidade isolada (SRP)
+async function processOrder(data: CreateOrderDTO) {
+  const order = await validateAndCreateOrder(data)
+  await Promise.all([
+    sendOrderConfirmationEmail(order),
+    updateInventory(order.items),
+    notifyWarehouse(order)
+  ])
+  return order
+}
+```
+
+#### 🔁 Código Duplicado (DRY)
+```typescript
+// ❌ Antes
+const userA = { ...rawUser, createdAt: new Date() }
+const userB = { ...rawUser, createdAt: new Date() }
+
+// ✅ Depois: extraia para função/helper
+const withTimestamp = <T>(obj: T): T & { createdAt: Date } =>
+  ({ ...obj, createdAt: new Date() })
+```
+
+#### 🔗 Acoplamento excessivo (DIP)
+```typescript
+// ❌ Antes: depende de implementação concreta
+class OrderService {
+  private db = new MySQLDatabase()
+}
+
+// ✅ Depois: depende de abstração
+class OrderService {
+  constructor(private db: IDatabase) {}
+}
+```
+
+#### 💉 Magic numbers / strings
+```typescript
+// ❌ Antes
+if (user.role === 2) { ... }
+setTimeout(fn, 86400000)
+
+// ✅ Depois
+const UserRole = { ADMIN: 2, USER: 1 } as const
+const ONE_DAY_MS = 24 * 60 * 60 * 1000
+```
+
+### 3. Checklist SOLID
+
+| Princípio | Verificação |
+|-----------|-------------|
+| **S** - SRP | Cada classe/módulo tem UMA razão para mudar? |
+| **O** - OCP | Extensível sem modificar código existente? |
+| **L** - LSP | Subclasses substituem bases sem quebrar? |
+| **I** - ISP | Interfaces pequenas e específicas? |
+| **D** - DIP | Módulos de alto nível dependem de abstrações? |
+
+### 4. Estratégia de Refatoração Segura
+```
+1. git checkout -b refactor/nome-do-que-vai-refatorar
+2. Rode testes → confirme que estão passando
+3. Refatore EM PEQUENOS PASSOS (1 smell por vez)
+4. Rode testes após cada passo
+5. Se testes quebrarem → git stash e reanalise
+6. PR com descrição do que mudou e por quê
+```
+
+### 5. Padrões de Design Comuns
+
+| Problema | Padrão |
+|----------|--------|
+| Muitos `if/else` de tipo | Strategy ou Polymorphism |
+| Criação complexa de objetos | Builder ou Factory |
+| Dependências globais | Dependency Injection |
+| Operações em coleções | Pipeline / Fluent Interface |
+| Estado compartilhado | Observer ou Event Emitter |
+
+### Regras desta Skill
+- NUNCA refatore sem testes
+- Commits atômicos (1 mudança por commit)
+- Preserve contratos públicos (não quebre APIs)
+- Documente PORQUÊ, não O QUÊ
+
+
+==================================================
+
+## security-audit.skill
+
+# 🔐 Skill: Auditoria de Segurança
+
+## Ativação
+Use quando: "segurança", "vulnerabilidade", "OWASP", "CVE", "autenticação", "autorização", "injeção"
+
+## OWASP Top 10 - Checklist Completo
+
+### A01: Broken Access Control
+```typescript
+// ❌ VULNERÁVEL: usuário pode acessar dados de outro
+app.get('/api/orders/:id', async (req, res) => {
+  const order = await db.order.findById(req.params.id)
+  res.json(order)
+})
+
+// ✅ SEGURO: verificar ownership
+app.get('/api/orders/:id', authenticate, async (req, res) => {
+  const order = await db.order.findFirst({
+    where: { id: req.params.id, userId: req.user.id } // ← ownership check
+  })
+  if (!order) return res.status(403).json({ error: 'Forbidden' })
+  res.json(order)
+})
+```
+
+### A02: Cryptographic Failures
+```typescript
+// ❌ NUNCA: senha em plain text ou MD5
+const hash = md5(password)
+
+// ✅ SEMPRE: bcrypt com custo ≥ 12
+import bcrypt from 'bcrypt'
+const hash = await bcrypt.hash(password, 12)
+const valid = await bcrypt.compare(inputPassword, hash)
+
+// ✅ Dados sensíveis em trânsito: HTTPS obrigatório
+// ✅ Dados sensíveis em repouso: encrypt com AES-256
+```
+
+### A03: Injection (SQL, XSS, Command)
+```typescript
+// ❌ SQL Injection
+const users = await db.query(`SELECT * FROM users WHERE email = '${email}'`)
+
+// ✅ Parametrizado (Prisma/TypeORM fazem isso automaticamente)
+const users = await prisma.user.findMany({ where: { email } })
+
+// ❌ XSS
+element.innerHTML = userInput
+
+// ✅ Sanitize
+import DOMPurify from 'dompurify'
+element.innerHTML = DOMPurify.sanitize(userInput)
+```
+
+### A04: Insecure Design
+- Design para falha segura (fail-secure)
+- Princípio do menor privilégio
+- Defense in depth: múltiplas camadas de segurança
+- Separar admin de usuário regular por rotas/middleware diferentes
+
+### A05: Security Misconfiguration
+```typescript
+// ❌ Debug habilitado em produção
+app.use(morgan('dev')) // em produção
+
+// ✅ Configuração por ambiente
+if (process.env.NODE_ENV !== 'production') {
+  app.use(morgan('dev'))
+}
+
+// ✅ Helmet para headers HTTP seguros
+import helmet from 'helmet'
+app.use(helmet())
+
+// ✅ CORS restritivo
+app.use(cors({ origin: process.env.ALLOWED_ORIGINS?.split(',') }))
+```
+
+### A06: Vulnerable Components
+```bash
+# Verificar dependências com vulnerabilidades
+npm audit
+npm audit fix
+
+# Verificar CVEs conhecidos
+npx snyk test
+```
+
+### A07: Authentication Failures
+```typescript
+// ✅ JWT seguro
+const token = jwt.sign(
+  { userId: user.id, role: user.role },
+  process.env.JWT_SECRET!,
+  { 
+    expiresIn: '15m',      // Access token curto
+    algorithm: 'HS256'
+  }
+)
+
+// ✅ Refresh token rotation
+// ✅ Rate limiting em login
+import rateLimit from 'express-rate-limit'
+const loginLimiter = rateLimit({ windowMs: 15*60*1000, max: 5 })
+app.use('/api/auth/login', loginLimiter)
+
+// ✅ Account lockout após N tentativas
+```
+
+### A08: Software and Data Integrity
+```typescript
+// ✅ Validação de entrada em TODAS as rotas
+import { z } from 'zod'
+
+const createUserSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(8).max(100),
+  name: z.string().min(2).max(100).regex(/^[a-zA-ZÀ-ÿ\s]+$/)
+})
+
+app.post('/api/users', (req, res) => {
+  const result = createUserSchema.safeParse(req.body)
+  if (!result.success) return res.status(400).json(result.error)
+  // ... use result.data (typed and validated)
+})
+```
+
+### A09: Logging & Monitoring
+```typescript
+// ✅ Log eventos de segurança (sem dados sensíveis)
+logger.warn('Failed login attempt', { 
+  email: obfuscateEmail(email),
+  ip: req.ip,
+  timestamp: new Date()
+})
+
+// ✅ NÃO logar:
+// - Senhas, tokens, cartões de crédito
+// - CPF/dados pessoais completos
+// - Conteúdo de mensagens privadas
+```
+
+### A10: SSRF (Server-Side Request Forgery)
+```typescript
+// ✅ Whitelist de domínios permitidos para fetch externo
+const ALLOWED_DOMAINS = ['api.stripe.com', 'api.sendgrid.com']
+function validateUrl(url: string): boolean {
+  const { hostname } = new URL(url)
+  return ALLOWED_DOMAINS.includes(hostname)
+}
+```
+
+## Checklist de Auditoria Rápida
+- [ ] Senhas com bcrypt ≥ 12 rounds?
+- [ ] JWT com expiração curta + refresh token?
+- [ ] Rate limiting em endpoints sensíveis?
+- [ ] Validação de entrada com Zod/Joi?
+- [ ] Helmet configurado?
+- [ ] CORS restritivo?
+- [ ] Secrets em variáveis de ambiente (.env)?
+- [ ] npm audit sem HIGH/CRITICAL?
+- [ ] HTTPS em produção?
+- [ ] Logs sem dados sensíveis?
+
+### Regras desta Skill
+- Segurança não é opcional — é requisito de qualidade
+- Nunca confie em input do cliente (valide sempre no server)
+- Princípio do menor privilégio em tudo
+- Falha aberta é pior que falha fechada
+
+
+==================================================
+
+## test-generator.skill
+
+# 🧪 Skill: Gerador de Testes
+
+## Ativação
+Use quando: "criar testes", "testar", "TDD", "cobertura", "Jest", "Vitest", "spec"
+
+## Filosofia de Testes
+
+```
+Unitário  → Testa uma função isolada (mock de dependências)
+Integração → Testa módulos interagindo (DB real ou em memória)
+E2E        → Testa fluxo completo do usuário (Playwright/Cypress)
+
+Regra 70/20/10: 70% unit, 20% integration, 10% E2E
+```
+
+## Templates por Tipo
+
+### 1. Teste Unitário (Jest/Vitest)
+```typescript
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { UserService } from './user.service'
+import { UserRepository } from './user.repository'
+
+// Mock da dependência
+vi.mock('./user.repository')
+
+describe('UserService', () => {
+  let userService: UserService
+  let mockUserRepo: vi.Mocked<UserRepository>
+
+  beforeEach(() => {
+    mockUserRepo = new UserRepository() as vi.Mocked<UserRepository>
+    userService = new UserService(mockUserRepo)
+    vi.clearAllMocks()
+  })
+
+  describe('findById', () => {
+    it('should return user when found', async () => {
+      // Arrange
+      const mockUser = { id: '1', name: 'João', email: 'joao@test.com' }
+      mockUserRepo.findById.mockResolvedValue(mockUser)
+
+      // Act
+      const result = await userService.findById('1')
+
+      // Assert
+      expect(result).toEqual(mockUser)
+      expect(mockUserRepo.findById).toHaveBeenCalledWith('1')
+      expect(mockUserRepo.findById).toHaveBeenCalledTimes(1)
+    })
+
+    it('should throw UserNotFoundError when user does not exist', async () => {
+      // Arrange
+      mockUserRepo.findById.mockResolvedValue(null)
+
+      // Act & Assert
+      await expect(userService.findById('999'))
+        .rejects
+        .toThrow('User not found')
+    })
+  })
+})
+```
+
+### 2. Teste de Componente React (Testing Library)
+```typescript
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { LoginForm } from './LoginForm'
+
+describe('LoginForm', () => {
+  const mockOnSubmit = vi.fn()
+
+  beforeEach(() => {
+    mockOnSubmit.mockClear()
+  })
+
+  it('should render email and password fields', () => {
+    render(<LoginForm onSubmit={mockOnSubmit} />)
+    
+    expect(screen.getByLabelText(/email/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/senha/i)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /entrar/i })).toBeInTheDocument()
+  })
+
+  it('should call onSubmit with credentials when form is valid', async () => {
+    const user = userEvent.setup()
+    render(<LoginForm onSubmit={mockOnSubmit} />)
+
+    await user.type(screen.getByLabelText(/email/i), 'user@test.com')
+    await user.type(screen.getByLabelText(/senha/i), 'senha123')
+    await user.click(screen.getByRole('button', { name: /entrar/i }))
+
+    await waitFor(() => {
+      expect(mockOnSubmit).toHaveBeenCalledWith({
+        email: 'user@test.com',
+        password: 'senha123'
+      })
+    })
+  })
+
+  it('should show validation error for invalid email', async () => {
+    const user = userEvent.setup()
+    render(<LoginForm onSubmit={mockOnSubmit} />)
+
+    await user.type(screen.getByLabelText(/email/i), 'email-invalido')
+    await user.click(screen.getByRole('button', { name: /entrar/i }))
+
+    expect(screen.getByText(/email inválido/i)).toBeInTheDocument()
+    expect(mockOnSubmit).not.toHaveBeenCalled()
+  })
+})
+```
+
+### 3. Teste de API/Integration (Supertest)
+```typescript
+import request from 'supertest'
+import { app } from '../app'
+import { prisma } from '../lib/prisma'
+
+describe('POST /api/auth/login', () => {
+  beforeEach(async () => {
+    await prisma.user.create({
+      data: { email: 'test@test.com', password: await hash('senha123') }
+    })
+  })
+
+  afterEach(async () => {
+    await prisma.user.deleteMany()
+  })
+
+  it('should return JWT token on valid credentials', async () => {
+    const response = await request(app)
+      .post('/api/auth/login')
+      .send({ email: 'test@test.com', password: 'senha123' })
+
+    expect(response.status).toBe(200)
+    expect(response.body).toHaveProperty('token')
+    expect(response.body.token).toMatch(/^eyJ/)
+  })
+
+  it('should return 401 on invalid credentials', async () => {
+    const response = await request(app)
+      .post('/api/auth/login')
+      .send({ email: 'test@test.com', password: 'errada' })
+
+    expect(response.status).toBe(401)
+    expect(response.body.message).toBe('Credenciais inválidas')
+  })
+})
+```
+
+### 4. Checklist de Cobertura
+- [ ] Happy path (fluxo normal)
+- [ ] Edge cases (limites, zeros, strings vazias)
+- [ ] Error cases (exceções, falhas de rede)
+- [ ] Boundary values (min/max, limites de array)
+- [ ] Null/undefined inputs
+
+### Convenção de Nomenclatura
+```
+describe('NomeDoMódulo') {
+  describe('nomeDoMétodo') {
+    it('should [ação esperada] when [condição]')
+    // Exemplo:
+    it('should return null when user is not found')
+    it('should throw error when email is invalid')
+    it('should send email when order is confirmed')
+  }
+}
+```
+
+### Regras desta Skill
+- AAA Pattern: Arrange → Act → Assert (sempre)
+- 1 assertion por conceito (não 10 expects num teste)
+- Testes independentes: não dependem de ordem de execução
+- Nomes de teste como documentação viva
+- Coverage meta: > 80% para código crítico de negócio
+
+
+==================================================
+
