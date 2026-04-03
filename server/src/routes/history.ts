@@ -1,102 +1,54 @@
 import { Router, Request, Response } from 'express'
-import fs from 'fs'
-import path from 'path'
+import db from '../lib/db'
+import { randomUUID } from 'crypto'
 
 const router = Router()
-const HISTORY_FILE = path.join(__dirname, '../../data/history.json')
 
-// ─── Helpers ─────────────────────────────────────────────
-interface HistoryItem {
-  id: string
-  title: string
-  prompt: string
-  siteType: string
-  html: string
-  createdAt: string
-  size: number
-}
-
-function readHistory(): HistoryItem[] {
-  if (!fs.existsSync(HISTORY_FILE)) return []
-  try {
-    return JSON.parse(fs.readFileSync(HISTORY_FILE, 'utf-8'))
-  } catch {
-    return []
-  }
-}
-
-function writeHistory(items: HistoryItem[]): void {
-  fs.mkdirSync(path.dirname(HISTORY_FILE), { recursive: true })
-  fs.writeFileSync(HISTORY_FILE, JSON.stringify(items, null, 2), 'utf-8')
-}
-
-function generateId(): string {
-  return Date.now().toString(36) + Math.random().toString(36).slice(2, 6)
-}
-
-// ─── GET /api/history ─────────────────────────────────────
 router.get('/', (_req: Request, res: Response) => {
-  const history = readHistory()
-  // Return without full HTML to keep response small
-  const list = history.map(({ html: _html, ...rest }) => rest)
-  return res.json({ items: list, total: list.length })
+  const sites = db.prepare(`
+    SELECT id, title, prompt, site_type as siteType, color_scheme as colorScheme,
+           model, html_size as htmlSize, created_at as createdAt,
+           deployed, deploy_url as deployUrl
+    FROM generated_sites ORDER BY created_at DESC
+  `).all()
+  return res.json({ items: sites, total: (sites as unknown[]).length })
 })
 
-// ─── POST /api/history — save a generated site ────────────
-router.post('/', (req: Request, res: Response) => {
-  const { prompt, siteType, html } = req.body as {
-    prompt?: string
-    siteType?: string
-    html?: string
-  }
-
-  if (!html?.trim()) {
-    return res.status(400).json({ error: 'html is required' })
-  }
-
-  const history = readHistory()
-  const item: HistoryItem = {
-    id: generateId(),
-    title: prompt?.slice(0, 60) || 'Site gerado',
-    prompt: prompt || '',
-    siteType: siteType || 'landing',
-    html,
-    createdAt: new Date().toISOString(),
-    size: Buffer.byteLength(html, 'utf-8'),
-  }
-
-  history.unshift(item)
-
-  // Keep last 50 sites
-  const trimmed = history.slice(0, 50)
-  writeHistory(trimmed)
-
-  return res.status(201).json({ id: item.id, title: item.title })
-})
-
-// ─── GET /api/history/:id — full HTML ─────────────────────
 router.get('/:id', (req: Request, res: Response) => {
-  const history = readHistory()
-  const item = history.find(h => h.id === req.params['id'])
-  if (!item) return res.status(404).json({ error: 'Not found' })
-  return res.json(item)
+  const id = req.params['id'] as string
+  const site = db.prepare('SELECT * FROM generated_sites WHERE id = ?').get(id)
+  if (!site) return res.status(404).json({ error: 'Not found' })
+  db.prepare('UPDATE generated_sites SET opened_at = datetime("now") WHERE id = ?').run(id)
+  return res.json(site)
 })
 
-// ─── DELETE /api/history/:id ──────────────────────────────
-router.delete('/:id', (req: Request, res: Response) => {
-  const history = readHistory()
-  const filtered = history.filter(h => h.id !== req.params['id'])
-  if (filtered.length === history.length) {
-    return res.status(404).json({ error: 'Not found' })
+router.post('/', (req: Request, res: Response) => {
+  const { prompt, siteType, colorScheme, model, html } = req.body as {
+    prompt?: string; siteType?: string; colorScheme?: string; model?: string; html?: string
   }
-  writeHistory(filtered)
-  return res.json({ deleted: req.params['id'] })
+  if (!html?.trim()) return res.status(400).json({ error: 'html is required' })
+  const id = randomUUID()
+  db.prepare(`
+    INSERT INTO generated_sites (id, title, prompt, site_type, color_scheme, model, html, html_size)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    id,
+    (prompt || 'Site gerado').slice(0, 80),
+    prompt || '',
+    siteType || 'landing',
+    colorScheme || 'dark',
+    model || 'gpt-4o',
+    html,
+    Buffer.byteLength(html, 'utf-8'),
+  )
+  return res.status(201).json({ id, title: (prompt || 'Site gerado').slice(0, 80) })
 })
 
-// ─── DELETE /api/history — clear all ─────────────────────
-router.delete('/', (_req: Request, res: Response) => {
-  writeHistory([])
-  return res.json({ cleared: true })
+router.delete('/:id', (req: Request, res: Response) => {
+  const id = req.params['id'] as string
+  const r = db.prepare('DELETE FROM generated_sites WHERE id = ?').run(id)
+  if (r.changes === 0) return res.status(404).json({ error: 'Not found' })
+  return res.json({ deleted: id })
 })
 
 export { router as historyRouter }

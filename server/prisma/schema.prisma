@@ -1,0 +1,86 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+
+// ─── Tabelas ─────────────────────────────────────────────
+
+// Sites gerados pelo Site Builder
+model GeneratedSite {
+  id          String   @id @default(cuid())
+  title       String
+  prompt      String
+  siteType    String   @default("landing")
+  colorScheme String   @default("dark")
+  model       String   @default("gpt-4o")
+  html        String
+  htmlSize    Int
+  createdAt   DateTime @default(now())
+  openedAt    DateTime?
+  deployed    Boolean  @default(false)
+  deployUrl   String?
+
+  @@map("generated_sites")
+}
+
+// Sessões de interação no site
+model Session {
+  id        String    @id @default(cuid())
+  startedAt DateTime  @default(now())
+  endedAt   DateTime?
+  page      String    @default("dashboard")
+  actions   Action[]
+
+  @@map("sessions")
+}
+
+// Ações do usuário no site
+model Action {
+  id        String   @id @default(cuid())
+  sessionId String
+  session   Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  type      String   // "generate", "refine", "navigate", "download", "deploy", "prompt"
+  page      String
+  payload   String   // JSON string
+  createdAt DateTime @default(now())
+
+  @@map("actions")
+}
+
+// Prompts e respostas (histórico completo de AI)
+model PromptLog {
+  id        String   @id @default(cuid())
+  feature   String   // "site-builder", "notebooklm", "design", "terminal"
+  model     String
+  prompt    String
+  response  String
+  tokens    Int?
+  duration  Int?     // ms
+  createdAt DateTime @default(now())
+
+  @@map("prompt_logs")
+}
+
+// Notas salvas (qualquer conteúdo para Obsidian sync)
+model Note {
+  id        String   @id @default(cuid())
+  title     String
+  content   String
+  tags      String   @default("[]")  // JSON array
+  source    String   @default("manual")  // "notebooklm", "research", "manual"
+  syncedAt  DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("notes")
+}
+
