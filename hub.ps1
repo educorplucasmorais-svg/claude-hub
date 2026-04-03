@@ -62,12 +62,14 @@ function Show-Help {
     W "  audio overview              Roteiro de podcast (2 vozes)" "White"
     W "  perguntar                   Chat Q&A sobre documentos" "White"
     WBlank
-    W "  DESIGN GENERATOR (Stitch)" "Cyan"
+    W "  SITE BUILDER (GPT-4o via Copilot)" "Cyan"
     WDiv
+    W "  gerar site [descricao]      Gerar site HTML completo com GPT-4o" "White"
+    W "  gerar site landing [desc]   Landing page profissional" "White"
+    W "  gerar site dashboard [desc] Dashboard admin" "White"
     W "  design [descricao]          Gerar componente React + Tailwind" "White"
     W "  html [descricao]            Gerar pagina HTML completa" "White"
     W "  abrir site                  Abrir Claude Hub no navegador" "White"
-    W "  configurar chave            Configurar Gemini API key" "White"
     WBlank
     W "  OUTROS" "Cyan"
     WDiv
@@ -304,7 +306,46 @@ function Handle-Input {
         return
     }
 
-    # Design Generator (Stitch-powered)
+    # ── Site Builder (GPT-4o via GitHub Copilot — sem API key) ───────────
+    if ($L -match "^(gerar site|criar site|site|build site|make site)\s*(.*)") {
+        $desc = $inp -replace "(?i)^(gerar site|criar site|site|build site|make site)\s*", ""
+        $desc = $desc.Trim()
+
+        # Detectar tipo automaticamente
+        $tipo = "landing"
+        if ($desc -match "\bdashboard\b") { $tipo = "dashboard" }
+        elseif ($desc -match "\bportfolio\b|\bportofolio\b") { $tipo = "portfolio" }
+        elseif ($desc -match "\bsaas\b|\bplataforma\b") { $tipo = "saas" }
+        elseif ($desc -match "\bloja\b|\becommerce\b|\bshop\b|\bproduto\b") { $tipo = "ecommerce" }
+        elseif ($desc -match "\bblog\b|\bartigo\b") { $tipo = "blog" }
+        elseif ($desc -match "\bapp\b|\baplicativo\b") { $tipo = "app" }
+
+        if (-not $desc) {
+            WC "Descreva o site que voce quer gerar:"
+            $desc = Read-Host " "
+        }
+
+        WBlank
+        WC "Site Builder CLI (GPT-4o via GitHub Copilot)"
+        WA "Tipo detectado: $tipo"
+        WA "Gerando: $desc"
+        WBlank
+
+        Run-Script "scripts\site-builder\gerar-site.ps1" @($desc, "-Tipo", $tipo, "-Abrir")
+        return
+    }
+
+    # ── gerar site com deploy ────────────────────────────────────────────
+    if ($L -match "^(deploy site|publicar site|gerar e publicar)\s*(.*)") {
+        $desc = $inp -replace "(?i)^(deploy site|publicar site|gerar e publicar)\s*", ""
+        $desc = $desc.Trim()
+        if (-not $desc) { $desc = Read-Host " " }
+        WC "Gerando site e fazendo deploy no Vercel..."
+        Run-Script "scripts\site-builder\gerar-site.ps1" @($desc, "-Deploy", "-Abrir")
+        return
+    }
+
+    # ── Design Generator (React components via Gemini) ───────────────────
     if ($L -match "^(design|criar design|gerar design|criar ui|gerar ui|criar componente)\s+(.+)") {
         $desc = $inp -replace "(?i)^(design|criar design|gerar design|criar ui|gerar ui|criar componente)\s+", ""
         WC "Gerando design: '$desc'"

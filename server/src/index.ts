@@ -30,8 +30,10 @@ app.use('/api/history',  historyRouter)
 app.get('/api/health', (_req, res) => {
   res.json({
     status: 'ok',
-    gemini: !!process.env.GEMINI_API_KEY,
-    version: '1.0.0',
+    engine: 'github-models',
+    model: 'gpt-4o',
+    auth: 'GitHub Copilot (gh auth token)',
+    version: '1.1.0',
     timestamp: new Date().toISOString(),
   })
 })
@@ -39,7 +41,7 @@ app.get('/api/health', (_req, res) => {
 // ─── Start ───────────────────────────────────────────────
 app.listen(PORT, () => {
   console.log(`Claude Hub API running on http://localhost:${PORT}`)
-  console.log(`Gemini key: ${process.env.GEMINI_API_KEY ? 'OK' : 'NOT SET — set GEMINI_API_KEY in .env'}`)
+  console.log(`Engine: GitHub Models (GPT-4o via Copilot) — no API key needed`)
 })
 
 export default app

@@ -1,8 +1,9 @@
 import { Router, Request, Response } from 'express'
+import { execSync } from 'child_process'
 
 const router = Router()
 
-// ─── Gemini system prompt ─────────────────────────────────
+// ─── System prompt ────────────────────────────────────────
 const SYSTEM_PROMPT = `Você é um expert em HTML/CSS/JS. Gere APENAS um documento HTML5 COMPLETO e funcional (sem explicações, sem markdown, sem texto extra — só o HTML).
 
 Regras obrigatórias:
@@ -19,10 +20,104 @@ Regras obrigatórias:
 - O resultado deve parecer um site REAL e profissional
 - Retorne APENAS o HTML, nada mais`
 
-// ─── Gemini call ─────────────────────────────────────────
-async function callGemini(prompt: string): Promise<string> {
-  const apiKey = process.env.GEMINI_API_KEY
-  if (!apiKey) throw new Error('GEMINI_API_KEY not configured on server')
+// ─── Get GitHub token (Copilot auth) ─────────────────────
+function getGithubToken(): string {
+  const envToken = process.env.GITHUB_TOKEN
+  if (envToken) return envToken
+  try {
+    return execSync('gh auth token', { encoding: 'utf-8' }).trim()
+  } catch {
+    throw new Error('GitHub token not found. Run: gh auth login')
+  }
+}
+
+// ─── GitHub Models API call (GPT-4o via Copilot) ─────────
+async function callGitHubModels(prompt: string, model = 'gpt-4o'): Promise<string> {
+  const token = getGithubToken()
+
+  const res = await fetch('https://models.inference.ai.azure.com/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      model,
+      messages: [
+        { role: 'system', content: SYSTEM_PROMPT },
+        { role: 'user',   content: prompt },
+      ],
+      max_tokens: 8192,
+      temperature: 0.7,
+    }),
+  })
+
+  const data = await res.json() as {
+    choices?: Array<{ message?: { content?: string } }>
+    error?: { message?: string }
+  }
+
+  if (!res.ok) {
+    // Fallback to smaller model on quota/rate error
+    if (res.status === 429 && model !== 'gpt-4o-mini') {
+      console.warn(`[generate] ${model} rate limited, falling back to gpt-4o-mini`)
+      return callGitHubModels(prompt, 'gpt-4o-mini')
+    }
+    throw new Error(data.error?.message || `GitHub Models HTTP ${res.status}`)
+  }
+
+  const text = data.choices?.[0]?.message?.content || ''
+  // Strip markdown code block if present
+  const match = text.match(/```html\n?([\s\S]*?)```/)
+  return match ? match[1].trim() : text.trim()
+}
+
+// ─── POST /api/generate ───────────────────────────────────
+router.post('/', async (req: Request, res: Response) => {
+  const { prompt, siteType, colorScheme, model } = req.body as {
+    prompt?: string
+    siteType?: string
+    colorScheme?: string
+    model?: string
+  }
+
+  if (!prompt?.trim()) {
+    return res.status(400).json({ error: 'prompt is required' })
+  }
+
+  const fullPrompt = [
+    siteType    ? `Tipo de site: ${siteType}` : '',
+    colorScheme ? `Esquema de cores: ${colorScheme}` : '',
+    prompt,
+  ].filter(Boolean).join('\n')
+
+  try {
+    const selectedModel = model || 'gpt-4o'
+    console.log(`[generate] model=${selectedModel} type=${siteType} prompt="${prompt.slice(0, 60)}..."`)
+    const html = await callGitHubModels(fullPrompt, selectedModel)
+    return res.json({ html, model: selectedModel, engine: 'github-models' })
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'Generation failed'
+    console.error('[generate] error:', msg)
+    return res.status(500).json({ error: msg })
+  }
+})
+
+// ─── GET /api/generate/models — list available ────────────
+router.get('/models', (_req: Request, res: Response) => {
+  return res.json({
+    models: [
+      { id: 'gpt-4o',          label: 'GPT-4o (Recomendado)',  provider: 'GitHub Copilot' },
+      { id: 'gpt-4o-mini',     label: 'GPT-4o Mini (Rápido)',  provider: 'GitHub Copilot' },
+      { id: 'o1-mini',         label: 'o1-mini (Raciocínio)',  provider: 'GitHub Copilot' },
+    ],
+    engine: 'github-models',
+    auth: 'GitHub Copilot token (nenhuma API key necessária)',
+  })
+})
+
+export { router as generateRouter }
+
 
   const models = ['gemini-2.0-flash', 'gemini-2.0-flash-lite', 'gemini-1.5-flash']
   let lastError = ''
